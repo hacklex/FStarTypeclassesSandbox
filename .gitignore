@@ -4,6 +4,5 @@
 *.fst#
 fsharp/
 obj/
-Sandbox.fst
 .ionide/
 *.checked
