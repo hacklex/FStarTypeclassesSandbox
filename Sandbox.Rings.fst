@@ -180,6 +180,39 @@ let ring_zero_eq_minus_zero (#a) (#addition_cg: commutative_group a)
   ring_zero_is_addition_neutral r r.zero (r.neg r.zero);
   addition_cg._group.inversion (r.zero)
 
+open FStar.Tactics
+
+let ring_laws #a (#addition: commutative_group a) (#multiplication: monoid a) (r: ring addition multiplication) 
+  : Tac unit = 
+  let _eq = addition._cg_commutative_magma._cm_magma._eq in
+  Classical.forall_intro _eq.reflexivity;
+  Classical.forall_intro_2 (Classical.move_requires_2 _eq.symmetry);
+  Classical.forall_intro_3 (Classical.move_requires_3 _eq.transitivity);
+  assert (r.eq ==  _eq.eq);
+  let mul_congruence_impl (x y z w:a) : Lemma (_eq.eq x z /\ _eq.eq y w ==> 
+                                               _eq.eq (x `r.mul` y) (z `r.mul` w))
+                                    = if (_eq.eq x z && _eq.eq y w) then
+                                      multiplication._semigroup._magma.congruence x y z w in
+  let add_congruence_impl (x y z w:a) : Lemma (_eq.eq x z /\ _eq.eq y w ==> 
+                                               _eq.eq (x `r.add` y) (z `r.add` w))
+                                    = if (_eq.eq x z && _eq.eq y w) then
+                                      addition._cg_commutative_magma._cm_magma.congruence x y z w in
+  Classical.forall_intro_3 (Classical.move_requires_3 _eq.transitivity);
+  Classical.forall_intro_4 mul_congruence_impl;   
+  Classical.forall_intro_4 add_congruence_impl;   
+  Classical.forall_intro_3 r.left_distributivity;
+  Classical.forall_intro_3 r.right_distributivity;
+  Classical.forall_intro_3 r.right_distributivity;
+  Classical.forall_intro addition._group.inversion;
+  Classical.forall_intro addition._group._g_monoid.identity;
+  Classical.forall_intro_2 addition._cg_commutative_magma.commutativity;
+  Classical.forall_intro_3 addition._group._g_monoid._semigroup.associativity;
+  Classical.forall_intro multiplication.identity;
+  Classical.forall_intro_3 multiplication._semigroup.associativity;
+  Classical.forall_intro_2 (ring_zero_is_addition_neutral r);
+()
+  
+#push-options "--z3rlimit 50"
 let ring_zero_is_mul_absorber (#a) (#addition_cg: commutative_group a)
                                    (#mul_monoid: monoid a)
                                    (r: ring addition_cg mul_monoid)
@@ -201,6 +234,9 @@ let ring_zero_is_mul_absorber (#a) (#addition_cg: commutative_group a)
     mul_congruence z x r.zero x;
     congruence z x r.zero x;
     congruence x z x r.zero in  
+
+  assert (x `add` neg x `eq` z) ; 
+
   Classical.forall_intro_2 (ring_zero_is_addition_neutral r);
   mul_congruence x (r.add r.zero r.one) x r.one;
   r.left_distributivity x z one;
