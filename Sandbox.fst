@@ -1,5 +1,8 @@
 module Sandbox
 
+open FStar.Tactics
+open FStar.Tactics.Typeclasses
+
 type binary_relation a = a -> a -> bool
 
 type binary_op a = a -> a -> a
@@ -18,196 +21,183 @@ type transitivity_lemma #a (eq: binary_relation a)
 type congruence_lemma #a (eq: binary_relation a) (op: binary_op a)
   = (x:a)->(y:a)->(z:a)->(w:a) -> Lemma (requires eq x z /\ eq y w) (ensures eq (op x y) (op z w))
 
-type associativity_lemma #a (eq: binary_relation a) (op: binary_op a)
-  = (x:a) -> (y:a) -> (z:a) -> Lemma(op x (op y z) `eq` op (op x y) z)
-  
-type commutativity_lemma #a (eq: binary_relation a) (op: binary_op a)
-  = (x:a) -> (y:a) -> Lemma (op x y `eq` op y x)
-
-type identity_lemma #a (eq: binary_relation a) (op: binary_op a) (neutral:a) 
-  = (t:a) -> Lemma (ensures op t neutral `eq` t /\ op neutral t `eq` t)
-
-type inversion_lemma #a (eq: binary_relation a) (op: binary_op a) (inv: unary_op a) (neutral: a)
-  = (x:a) -> Lemma (inv x `op` x `eq` neutral /\ x `op` inv x `eq` neutral)
-
 class equatable a = {
-  eq: binary_relation a;
+  eq : binary_relation a;
   reflexivity: reflexivity_lemma eq;
   symmetry: symmetry_lemma eq;
   transitivity: transitivity_lemma eq
 }
 
-class magma a = {
-  _eq: equatable a;
-  op: binary_op a;
-  congruence: congruence_lemma _eq.eq op
+noeq type some_weird_type = {
+  wtf: string;
+  func: int -> int -> int
 }
 
-let make_magma a 
-  (eq: binary_relation a)
-  (op: binary_op a)
-  (reflexivity: reflexivity_lemma eq)
-  (symmetry: symmetry_lemma eq)
-  (transitivity: transitivity_lemma eq)
-  (congruence: congruence_lemma eq op) 
-  = Mkmagma (Mkequatable eq reflexivity symmetry transitivity) op congruence
-  
-instance equatable_of_magma a (h : magma a) : equatable a = h._eq
-
-instance eq_of_magma a (h: magma a) : binary_relation a = h._eq.eq
-
-class semigroup a = { 
-  _magma: magma a;
-  associativity: associativity_lemma #a eq op
-}
- 
-let make_semigroup a
-  (eq: binary_relation a)
-  (op: binary_op a)
-  (reflexivity: reflexivity_lemma eq)
-  (symmetry: symmetry_lemma eq)
-  (transitivity: transitivity_lemma eq)
-  (congruence: congruence_lemma eq op) 
-  (associativity: associativity_lemma eq op)
-  = Mksemigroup (Mkmagma (Mkequatable eq reflexivity symmetry transitivity) op congruence) associativity
-
-instance magma_of_semigroup a (h : semigroup a) : magma a = h._magma 
-
-class monoid a = {
-  _semigroup: semigroup a;
-  neutral: a;
-  identity: identity_lemma eq op neutral
+instance si : equatable some_weird_type = {
+  reflexivity = (fun x -> ());
+  symmetry = (fun _ _ -> ());
+  transitivity = (fun _ _ _ -> ());
+  eq = fun x y -> x.wtf = y.wtf
 }
 
-
-let make_monoid a 
-  (eq: binary_relation a)
-  (op: binary_op a)
-  (neutral: a)
-  (reflexivity: reflexivity_lemma eq)
-  (symmetry: symmetry_lemma eq)
-  (transitivity: transitivity_lemma eq)
-  (congruence: congruence_lemma eq op) 
-  (associativity: associativity_lemma eq op)
-  (identity: identity_lemma eq op neutral) = 
-  let equ = Mkequatable eq reflexivity symmetry transitivity in
-  let mag = Mkmagma equ op congruence in
-  let semi = Mksemigroup mag associativity in
-  Mkmonoid semi neutral identity
-
-class commutative_magma a = {
-  _cm_magma : magma a;
-  commutativity: commutativity_lemma #a eq op
+instance int_eq : equatable int = {
+  reflexivity = (fun x -> ());
+  symmetry = (fun _ _ -> ());
+  transitivity = (fun _ _ _ -> ());
+  eq = op_Equality  
 }
 
-let make_commutative_magma a
-  (eq: binary_relation a)
-  (op: binary_op a)
-  (reflexivity: reflexivity_lemma eq)
-  (symmetry: symmetry_lemma eq)
-  (transitivity: transitivity_lemma eq)
-  (congruence: congruence_lemma eq op) 
-  (commutativity: commutativity_lemma eq op)
-  = Mkcommutative_magma (make_magma a eq op reflexivity symmetry transitivity congruence) 
-                        commutativity
+instance (=) #c {|equatable c|} : binary_relation c = eq
 
-instance magma_of_commutative_magma a (h : commutative_magma a)  : magma a = h._cm_magma
+instance (<>) #c {|equatable c|} : binary_relation c = fun x y ->  not (x `eq` y)
 
-class commutative_semigroup a = {
-  _cs_semigroup: semigroup a;
-  _commutative_magma: (cm:commutative_magma a { cm._cm_magma == _cs_semigroup._magma })
+let cmp (x y: int) : bool = x=y
+
+let compare (x y: some_weird_type) : bool = x = y
+
+class has_mul a = {
+  _mul_eq: equatable a;
+  mul: binary_op a;
+  mul_congruence: congruence_lemma #a _mul_eq.eq mul
 }
 
-let commutative_semigroup_has_one_magma a (cg: commutative_semigroup a) 
-  : Lemma (cg._commutative_magma._cm_magma == cg._cs_semigroup._magma) 
-    [SMTPat(a, cg)] = ()
+instance equatable_of_has_mul #a (z:has_mul a) = z._mul_eq
 
-let make_commutative_semigroup a 
-  (eq: binary_relation a)
-  (op: binary_op a)
-  (reflexivity: reflexivity_lemma eq)
-  (symmetry: symmetry_lemma eq)
-  (transitivity: transitivity_lemma eq)
-  (congruence: congruence_lemma eq op) 
-  (associativity: associativity_lemma eq op)
-  (commutativity: commutativity_lemma eq op) =
-  Mkcommutative_semigroup (make_semigroup a eq op reflexivity symmetry transitivity congruence associativity)
-                          (make_commutative_magma a eq op reflexivity symmetry transitivity congruence commutativity)
+instance ( * ) #c {| has_mul c |} : binary_op c = mul
 
-instance semigroup_of_monoid a (h: monoid a) : semigroup a = h._semigroup
-
-class commutative_monoid a = {
-  _monoid: monoid a;
-  _cmon_magma: (cm:commutative_magma a { cm._cm_magma == _monoid._semigroup._magma });
+instance int_mul : has_mul int = { 
+  _mul_eq = int_eq; 
+  mul = op_Multiply;  
+  mul_congruence = fun _ _ _ _ -> ()
 }
 
-let commutative_monoid_has_one_magma a (cg: commutative_monoid a) 
-  : Lemma (cg._cmon_magma._cm_magma == cg._monoid._semigroup._magma) 
-    [SMTPat(a, cg)] = ()
+(* Make sure we don't break anything int-related 
+   Notice how we haven't declared commutativity for int yet. *)
+let test_int_lemma (x: int) (y: int) = assert (x*y = y*x) 
 
-let make_commutative_monoid a
-  (eq: binary_relation a)
-  (op: binary_op a)
-  (neutral: a)
-  (reflexivity: reflexivity_lemma eq)
-  (symmetry: symmetry_lemma eq)
-  (transitivity: transitivity_lemma eq)
-  (congruence: congruence_lemma eq op) 
-  (associativity: associativity_lemma eq op)
-  (commutativity: commutativity_lemma eq op)
-  (identity: identity_lemma eq op neutral) =
-  Mkcommutative_monoid (make_monoid a eq op neutral reflexivity symmetry transitivity congruence associativity identity)
-                       (make_commutative_magma a eq op reflexivity symmetry transitivity congruence commutativity)
-                       
-
-class group a = {
-  _g_monoid: monoid a;
-  inv: unary_op a;
-  inversion: inversion_lemma eq op inv neutral
+class mul_semigroup c = {
+  _mul_sg_hm: has_mul c;
+  mul_associativity : (x:c) -> (y:c) -> (z:c) -> Lemma (x*(y*z) = (x*y)*z)
 }
 
-let make_group a
-  (eq: binary_relation a)
-  (op: binary_op a)
-  (inv: unary_op a)
-  (neutral: a)
-  (reflexivity: reflexivity_lemma eq)
-  (symmetry: symmetry_lemma eq)
-  (transitivity: transitivity_lemma eq)
-  (congruence: congruence_lemma eq op) 
-  (associativity: associativity_lemma eq op)
-  (identity: identity_lemma eq op neutral) 
-  (inversion: inversion_lemma eq op inv neutral) =
-  Mkgroup (make_monoid a eq op neutral reflexivity symmetry transitivity congruence associativity identity) inv inversion
-
-class commutative_group a = {
-  _group: group a;
-  _cg_commutative_magma: (cm:commutative_magma a { cm._cm_magma == _group._g_monoid._semigroup._magma });
+class mul_commutative c = {
+  _mul_com_hm : has_mul c;
+  mul_commutativity: (x:c) -> (y:c) -> Lemma (x*y = y*x)
 }
 
-let commutative_group_has_one_magma a (cg: commutative_group a) : Lemma (
-  cg._cg_commutative_magma._cm_magma == cg._group._g_monoid._semigroup._magma
- ) [SMTPat(a, cg)] = ()
+class mul_commutative_semigroup c = 
+{
+  _mul_csg_hm : has_mul c; //are the following conditions redundant?
+  _mul_csg_comm: (com: mul_commutative c { com._mul_com_hm == _mul_csg_hm });
+  _mul_csg_sg: (sg:mul_semigroup c { sg._mul_sg_hm == _mul_csg_hm })
+}
 
-let make_commutative_group a 
-  (eq: binary_relation a)
-  (op: binary_op a)
-  (inv: unary_op a)
-  (neutral: a)
-  (reflexivity: reflexivity_lemma eq)
-  (symmetry: symmetry_lemma eq)
-  (transitivity: transitivity_lemma eq)
-  (congruence: congruence_lemma eq op) 
-  (associativity: associativity_lemma eq op)
-  (commutativity: commutativity_lemma eq op)
-  (identity: identity_lemma eq op neutral)
-  (inversion: inversion_lemma eq op inv neutral) =
-  Mkcommutative_group (make_group a eq op inv neutral reflexivity symmetry transitivity congruence associativity identity inversion)
-                      (make_commutative_magma a eq op reflexivity symmetry transitivity congruence commutativity)
+instance has_mul_of_semigroup #a (sg: mul_semigroup a) = sg._mul_sg_hm
 
-instance identity_of_commutative_group a (h:commutative_group a) : identity_lemma h._cg_commutative_magma._cm_magma._eq.eq h._cg_commutative_magma._cm_magma.op h._group._g_monoid.neutral =
-  h._group._g_monoid.identity
-  
-instance group_of_commutative_group a (h: commutative_group a) : group a = h._group
-instance commutative_magma_of_commutative_group a (h: commutative_group a) : commutative_magma a = h._cg_commutative_magma
+class mul_with_zero a = {
+  _mul_z_hm: has_mul a;
+  absorber: a;
+  annihilation: (x:a) -> Lemma (absorber*x = absorber /\ x*absorber = absorber)  
+}
 
+instance has_mul_of_hm_with_zero #a (z:mul_with_zero a) = z._mul_z_hm
+
+class mul_monoid a = {
+  _mul_mon_sg: mul_semigroup a;
+  one: a;
+  identity : (x:a) -> Lemma (one*x = x /\ x*one = x)
+}
+
+instance mul_semigroup_of_monoid #a (mm: mul_monoid a) = mm._mul_mon_sg
+
+class mul_comm_monoid a = {
+  _mm : mul_monoid a;
+  _comm: mul_commutative a 
+}
+
+type nonzero_of a {|mwz: mul_with_zero a|} = (x:a{x<>mwz.absorber})
+
+class mul_monoid_with_zero a = {
+  _mul_monz_eq : equatable a;
+  _mul_monz_mm : mul_monoid a; 
+  _mul_monz_z : mul_with_zero a 
+}
+
+instance mwz #a (z : mul_monoid_with_zero a) = z._mul_monz_z
+
+instance mm_of_z #a (mz: mul_monoid_with_zero a) = mz._mul_monz_mm
+
+class mul_group a = {
+  _mul_g_mz: mul_monoid_with_zero a;
+  inv: nonzero_of a #_mul_g_mz._mul_monz_z -> nonzero_of a;
+  inversion: (x: nonzero_of a) -> Lemma (((inv x * x) <: a) = one /\ ((x * inv x) <: a) = one)
+}
+
+let has_mul_of_group #a (g: mul_group a) : has_mul a = g._mul_g_mz._mul_monz_z._mul_z_hm
+
+class mul_commutative_group a = {
+  _mul_cg_g: mul_group a;
+  _mul_cg_com : (cm:mul_commutative a { has_mul_of_group _mul_cg_g == cm._mul_com_hm })
+}
+
+class has_add a = {
+  _add_eq : equatable a;
+  add : binary_op a;
+  add_congruence : (x:a)->(y:a)->(z:a)->(w:a) -> Lemma(requires x = z /\ y = w) (ensures add x y = add z w);
+  add_commutativity : (x:a)->(y:a)-> Lemma (add x y = add y x)
+}
+
+instance equatable_of_has_add #a (z:has_add a) = z._add_eq
+
+instance ( + ) #c {| has_add c |} : binary_op c = add
+
+instance int_add : has_add int = { 
+  _add_eq = int_eq; 
+  add = op_Addition;    
+  add_commutativity = (fun _ _ -> ());
+  add_congruence = fun a b c d -> ()
+}
+
+let just_in_case (x y z: int) : Lemma ((x+y)*z = x*z + y*z) = () // we broke nothing for ints 
+
+class add_semigroup a = {
+  _add_sg_ha : has_add a;
+  associativity : (x:a)->(y:a)->(z:a)->Lemma (x+(y+z)=(x+y)+z) //operations resolved successfully
+}
+
+instance has_add_of_add_sg a (sg: add_semigroup a) = sg._add_sg_ha
+
+class add_monoid a = {
+  _add_mon_sg: add_semigroup a;
+  zero: a;
+  add_identity: (x:a) -> Lemma (zero+x=x /\ x+zero=x)
+}
+
+instance sg_of_add_m a (m: add_monoid a) = m._add_mon_sg
+
+class add_group a = {
+  _add_g_mon: add_monoid a;
+  neg: unary_op a;
+  negation: (x:a) -> Lemma (x + neg x = zero /\ neg x + x = zero)
+}
+
+instance m_of_add_g a (g: add_group a) = g._add_g_mon
+
+class ring a = {
+  _ring_add_g : add_group a;
+  _ring_mul_m : mul_monoid a;
+  //We need to be sure that (=) is the same between has_add and has_mul
+  //I don't know how to achieve that. 
+  //Currently I strive to reduce redundance. 
+  left_distributivity : (x:a)->(y:a)->(z:a)->Lemma (x*(y+z) = x*y + x*z);
+  right_distributivity : (x:a)->(y:a)->(z:a)->Lemma ((x+y)*z = x*z + x*z)
+  //addition zero = multiplication absorber is a theorem here  
+}
+
+instance add_of_ring a (r: ring a) = r._ring_add_g
+instance mul_of_ring a (r: ring a) = r._ring_mul_m
+
+class domain a = {
+  _domain_r : ring a;
+  domain_law : (x:a) -> (y:a) -> Lemma (((x*y)=zero) <==> ((x=zero) \/ (y=zero)))
+}
